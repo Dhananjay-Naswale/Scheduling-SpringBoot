@@ -1,0 +1,519 @@
+What is Scheduling ?
+
+ - Scheduling in SpringBoot allows you to automate the tasks at Specific intervals or times.
+ - It helps in running background jobs without manual intervention.
+===================================================================================================
+why do we need Scheduling ?
+ 
+- without scheduling background jobs without manual intervention.
+===================================================================================================
+Use cases of Scheduling ?
+
+- Scenario                         How Scheduling Helps
+Order Processing 		Automatically Process Pending orders every 5 minutes. 
+Email Notifications 		Send Promotional emails daily at midnight.
+Data CleanUp 			Delete old record every Sundat at 2 Am.
+Stock Updates 			Fetch stock Price from APIs every hour.
+System Health checks 		Log System every minute.
+==================================================================================================
+In Configuration class of @SpringBootApplication enables @EnableScheduling 
+examplple :- @Scheduled(fixedRate = 5000)
+             @Scheduled(fixedDelay = 5000)
+             @Scheduled(initialDelay = 5000)
+
+fixedRate :- Runs the tasks at a fixed interval, regardless of the Previous Exception.
+
+fixedDelay :- Waits for the Previous task to Complete, then waits before next run.
+
+initialDelay :- Waits before first execution , then follows fixedRate/fixedDelay.
+================================================================================================
+Cron Expression 
+ example :- Scheduled(cron = "******")
+* - Second(0-59)
+** - minute(0-59)
+*** - hour(0-23)
+**** - day month(1-31)
+***** - month(1-12)
+****** - day of week(0-7) 
+Note : Cron Expression Generator website also Available for Generating (Search on Google).
+===================================================================================================
+
+✅ 1. Static Scheduling (Regular Scheduling)
+Definition:
+Tasks are scheduled using fixed intervals or cron expressions defined in the code or application properties, and cannot be changed at runtime.
+
+Example:
+
+@Scheduled(cron = "0 0 * * * ?") // runs every hour
+public void processOrders() {
+    // logic here
+}
+
+Key Characteristics:
+
+Configured at compile time.
+
+Cannot be updated without restarting the application.
+
+Used for predictable, routine jobs.
+================================================================================================
+✅ 2. Dynamic Scheduling
+Definition:
+Tasks are scheduled at runtime based on data from a database, user input, or external configuration, and can be added, removed, or updated without restarting the application.
+
+Example:
+
+Cron expression stored in a database table.
+
+You fetch and schedule the task based on that dynamically.
+
+Key Characteristics:
+
+Configured and managed at runtime.
+
+Supports flexibility — you can change the cron or task behavior without a restart.
+
+Useful for user-driven or admin-configurable scheduling.
+===================================================================================================
+🔁 Comparison Table
+Feature	               		Static Scheduling	                     Dynamic Scheduling
+
+Configuration Time		Compile-time					Runtime
+Flexibility			Low						High
+Change Requires Restart		✅ Yes						❌ No
+Cron/Interval Location		In code or config file			In DB or external source
+Use Case			Routine, fixed jobs			Admin/user-configurable job execution
+
+🔧 Real-Life Use Case
+Scenario				Recommended Scheduling
+
+Send daily report at midnight		Static Scheduling
+User sets notification time in app	Dynamic Scheduling
+===================================================================================================
+
+Order Controller
+======================================================
+import com.codesnippet.order_processing_service.dto.OrderRequest;
+import com.codesnippet.order_processing_service.entity.Order;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import com.codesnippet.order_processing_service.service.OrderService;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+    @Autowired
+    private OrderService orderService;
+
+    @PostMapping("/create")
+    public ResponseEntity<Order> createOrder(@RequestBody OrderRequest request) {
+        Order order = orderService.createOrder(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(order);
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<Order>> getAllOrders() {
+        return ResponseEntity.ok(orderService.getAllOrders());
+    }
+}
+Dto
+====================================================================
+public class OrderRequest {
+    private String customerEmail;
+
+    public String getCustomerEmail() {
+        return customerEmail;
+    }
+
+    public void setCustomerEmail(String customerEmail) {
+        this.customerEmail = customerEmail;
+    }
+}
+
+entity
+=========================================================================
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
+@Entity
+@Table(name = "`order`")
+public class Order {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String customerEmail;
+    private String status; // PENDING, PROCESSING, COMPLETED
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        this.status = "PENDING";
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getCustomerEmail() {
+        return customerEmail;
+    }
+
+    public void setCustomerEmail(String customerEmail) {
+        this.customerEmail = customerEmail;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+}
+
+Repository
+=======================================================================
+import com.codesnippet.order_processing_service.entity.Order;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface OrderRepository extends JpaRepository<Order, Long> {
+    List<Order> findByStatus(String status);
+}
+
+Scheduler
+======================================================================
+import com.codesnippet.order_processing_service.entity.Order;
+import com.codesnippet.order_processing_service.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class OrderScheduler {
+    @Autowired
+    OrderRepository orderRepository;
+
+    @Scheduled(fixedRate = 1000)
+    public void processPendingOrders() {
+        System.out.println("Processing Orders");
+        List<Order> orders = orderRepository.findByStatus("PENDING");
+        orders.forEach(order -> {
+            order.setStatus("COMPLETED");
+            System.out.println(order.getCustomerEmail());
+            orderRepository.save(order);
+        });
+        System.out.println("Processed pending orders"+ orders.size());
+    }
+}
+
+OrderService
+==============================================================
+import com.codesnippet.order_processing_service.dto.OrderRequest;
+import com.codesnippet.order_processing_service.entity.Order;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.codesnippet.order_processing_service.repository.OrderRepository;
+
+import java.util.List;
+
+@Service
+public class OrderService {
+    @Autowired
+    private OrderRepository orderRepository;
+
+    public Order createOrder(OrderRequest request) {
+        Order order = new Order();
+        order.setCustomerEmail(request.getCustomerEmail());
+        return orderRepository.save(order);
+    }
+
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
+}
+
+===================================================================================================
+==================================================================================================
+Dynamic Scheduling 
+======================================================================================================================================================================================================
+Note :- 1> disable the @Schedule annotation from where we perform the Scheduling in(OrderSchduler class)
+2> ThreadPoolTaskScheduler -provide by Spring & manage by SpringBoot it's Multi- Threaded  
+
+Controller-ScheduleController
+	  -SchedulerController
+dto	- CronUpdateRequest
+entity - ScheduleConfig
+repository - ScheduleConfigRepo
+Shedulers - DynamicSchedulersServices
+
+
+Controller
+===============================================================================================
+import com.codesnippet.order_processing_service.entity.ScheduleConfig;
+import com.codesnippet.order_processing_service.repository.ScheduleConfigRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/schedule")
+public class ScheduleController {
+    
+    @Autowired
+    private ScheduleConfigRepository scheduleConfigRepository;
+
+    @PostMapping("/update")
+    public ResponseEntity<String> updateSchedule(@RequestParam String cronExpression) {
+        ScheduleConfig config = scheduleConfigRepository.findByTaskName("processOrders")
+                .orElse(new ScheduleConfig());
+        
+        config.setTaskName("processOrders");
+        config.setCronExpression(cronExpression);
+        scheduleConfigRepository.save(config);
+
+        return ResponseEntity.ok("Cron expression updated successfully!");
+    }
+}
+====================================================================================
+again Controller
+
+import com.codesnippet.order_processing_service.dto.CronUpdateRequest;
+import com.codesnippet.order_processing_service.repository.ScheduleConfigRepository;
+import com.codesnippet.order_processing_service.schedulers.DynamicSchedulerService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/scheduler")
+public class SchedulerController {
+
+    @Autowired
+    private ScheduleConfigRepository scheduleConfigRepository;
+
+    @Autowired
+    private DynamicSchedulerService dynamicSchedulerService;
+
+
+    @PostMapping("/update-cron")
+    public ResponseEntity<String> updateCron(@RequestBody CronUpdateRequest request) {
+        dynamicSchedulerService.updateCronExpression(request.getTaskName(), request.getCronExpression());
+        return ResponseEntity.ok("Cron expression updated successfully!");
+    }
+}
+==================================================================================
+dto
+
+public class CronUpdateRequest {
+    private String taskName;
+    private String cronExpression;
+
+    // Getters and Setters
+    public String getTaskName() {
+        return taskName;
+    }
+    public void setTaskName(String taskName) {
+        this.taskName = taskName;
+    }
+    public String getCronExpression() {
+        return cronExpression;
+    }
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
+    }
+}
+=============================================================================================
+Entity
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "schedule_config")
+public class ScheduleConfig {
+
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String taskName;
+    private String cronExpression;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getTaskName() {
+        return taskName;
+    }
+
+    public void setTaskName(String taskName) {
+        this.taskName = taskName;
+    }
+
+    public String getCronExpression() {
+        return cronExpression;
+    }
+
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
+    }
+}
+==============================================================================================
+Repository
+
+import com.codesnippet.order_processing_service.entity.ScheduleConfig;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface ScheduleConfigRepository extends JpaRepository<ScheduleConfig, Long> {
+    Optional<ScheduleConfig> findByTaskName(String taskName);
+}
+=================================================================================================
+Scheduler 
+
+import com.codesnippet.order_processing_service.entity.ScheduleConfig;
+import com.codesnippet.order_processing_service.repository.ScheduleConfigRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.ScheduledFuture;
+
+@Service
+public class DynamicSchedulerService {
+
+    @Autowired
+    private ScheduleConfigRepository scheduleConfigRepository;
+    @Autowired
+    private OrderScheduler orderScheduler;
+    private final ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+    private ScheduledFuture<?> scheduledTask;
+
+    public DynamicSchedulerService() {
+        taskScheduler.initialize();
+    }
+
+    public void updateCronExpression(String taskName, String newCron) {
+        ScheduleConfig config = scheduleConfigRepository.findByTaskName(taskName)
+                .orElse(new ScheduleConfig());
+        config.setTaskName(taskName);
+        config.setCronExpression(newCron);
+        scheduleConfigRepository.save(config);
+
+        restartScheduledTask(newCron);
+    }
+
+    private void restartScheduledTask(String cronExpression) {
+        if (scheduledTask != null) {
+            scheduledTask.cancel(false);
+        }
+        scheduledTask = taskScheduler.schedule(orderScheduler::processPendingOrders, new CronTrigger(cronExpression));
+    }
+
+
+}
+===============================================================================================
+Service is same 
+
+import com.codesnippet.order_processing_service.dto.OrderRequest;
+import com.codesnippet.order_processing_service.entity.Order;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.codesnippet.order_processing_service.repository.OrderRepository;
+
+import java.util.List;
+
+@Service
+public class OrderService {
+    @Autowired
+    private OrderRepository orderRepository;
+
+    public Order createOrder(OrderRequest request) {
+        Order order = new Order();
+        order.setCustomerEmail(request.getCustomerEmail());
+        return orderRepository.save(order);
+    }
+
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
+}
+===================================================================================================
+@SpringBootApplication
+@EnableScheduling
+public class OrderProcessingServiceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(OrderProcessingServiceApplication.class, args);
+	}
+
+}
+================================================================================================
+application.properties for h2 database  example ahai bhau
+
+spring.application.name=order-processing-service
+spring.datasource.url=jdbc:h2:mem:appdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=password
+spring.h2.console.enabled=true
+===================================================================================================
+Dependency in Pom.xml file 
+<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+===================================================================================================
