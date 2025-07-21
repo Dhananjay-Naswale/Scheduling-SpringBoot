@@ -505,6 +505,13 @@ spring.datasource.username=sa
 spring.datasource.password=password
 spring.h2.console.enabled=true
 ===================================================================================================
+postman testing 
+	http://localhost:8080/scheduler/update-cron
+		{
+ 		 "taskName": "processOrders",
+		 "cronExpression": "0/30 * * * * ?"
+		}
+=======================================================================================================================
 Dependency in Pom.xml file 
 <dependencies>
 		<dependency>
