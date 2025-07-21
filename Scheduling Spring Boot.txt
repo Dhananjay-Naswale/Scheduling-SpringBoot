@@ -473,6 +473,17 @@ public class OrderService {
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
     }
+    public void processPendingOrders() {
+            System.out.println("Processing Order");
+        List<Order> orders = orderRepository.findByStatus("PENDING");
+        orders.forEach(order -> {
+            order.setStatus("COMPLETED");
+            System.out.println(order.getCustomerEmail());
+            orderRepository.save(order);
+        });
+        System.out.println("Processed pending orders"+orders.size());
+
+    }
 }
 ===================================================================================================
 @SpringBootApplication
